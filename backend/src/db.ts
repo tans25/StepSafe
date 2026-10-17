@@ -22,6 +22,11 @@ export function openDb(file: string): DB {
       confirm_count INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at);
+    CREATE TABLE IF NOT EXISTS routes (
+      id       TEXT PRIMARY KEY,
+      position INTEGER NOT NULL,
+      data     TEXT NOT NULL
+    );
   `);
   return db;
 }
