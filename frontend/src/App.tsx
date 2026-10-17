@@ -14,11 +14,13 @@ import {
   computeRouteWarnings,
   confirmReport,
   createReport,
+  fetchAppMeta,
   fetchReports,
   fetchRoutes,
   fetchRouteWarnings,
   flagReport,
 } from './services/api';
+import { setHapticPatterns } from './services/haptics';
 import './App.css';
 
 export function App() {
@@ -57,6 +59,10 @@ export function App() {
     async function init() {
       const health = await checkBackendHealth();
       setIsBackendLive(health.ok);
+
+      // Backend is the source of truth for haptic patterns.
+      const meta = await fetchAppMeta();
+      setHapticPatterns(meta.haptic_patterns);
 
       const [loadedReports, loadedRoutes] = await Promise.all([
         fetchReports(),

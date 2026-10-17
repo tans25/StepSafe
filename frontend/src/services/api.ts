@@ -1,5 +1,5 @@
 import { DEFAULT_META, DEMO_PREPARED_ROUTES, SEEDED_FALLBACK_REPORTS } from '../config';
-import type { AppMeta, NewReportPayload, Report, Route, RouteWarning } from '../types';
+import type { AppMeta, CueType, HapticPattern, NewReportPayload, Report, Route, RouteWarning } from '../types';
 import { haversineDistanceM } from './geo';
 
 const API_BASE = '/api';
@@ -47,11 +47,60 @@ export function getIsBackendLive(): boolean {
   return isBackendLive === true;
 }
 
+const CUE_TYPES: CueType[] = ['left', 'right', 'caution', 'arrived'];
+
+function isHapticPattern(p: unknown): p is HapticPattern {
+  const x = p as HapticPattern | undefined;
+  return (
+    Array.isArray(x?.vibrate_ms) &&
+    x.vibrate_ms.length > 0 &&
+    x.vibrate_ms.every((n) => Number.isFinite(n) && n >= 0) &&
+    typeof x.text === 'string'
+  );
+}
+
+/**
+ * Loads /api/meta and converts it to the frontend's AppMeta shape. The backend is the source of
+ * truth for haptic patterns, demo area and limits; anything missing or malformed falls back to
+ * DEFAULT_META. Categories stay local because they carry icons and colors the API does not send.
+ */
 export async function fetchAppMeta(): Promise<AppMeta> {
   try {
     const res = await fetch(`${API_BASE}/meta`, { signal: AbortSignal.timeout(2500) });
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+
+      const haptic_patterns = { ...DEFAULT_META.haptic_patterns };
+      for (const cue of CUE_TYPES) {
+        if (isHapticPattern(data.haptic_patterns?.[cue])) haptic_patterns[cue] = data.haptic_patterns[cue];
+      }
+
+      // Backend sends center as {lat, lng}; the frontend uses [lat, lng].
+      const c = data.demo_area?.center;
+      const b = data.demo_area?.bounds;
+      const center: [number, number] =
+        Number.isFinite(c?.lat) && Number.isFinite(c?.lng) ? [c.lat, c.lng] : DEFAULT_META.demo_area.center;
+      const boundsOk = ['min_lat', 'max_lat', 'min_lng', 'max_lng'].every((k) => Number.isFinite(b?.[k]));
+
+      const limits = {
+        note_max_length: Number.isFinite(data.limits?.note_max_length)
+          ? data.limits.note_max_length
+          : DEFAULT_META.limits.note_max_length,
+        stale_after_days: Number.isFinite(data.limits?.stale_after_days)
+          ? data.limits.stale_after_days
+          : DEFAULT_META.limits.stale_after_days,
+      };
+
+      return {
+        ...DEFAULT_META,
+        demo_area: {
+          name: typeof data.demo_area?.name === 'string' ? data.demo_area.name : DEFAULT_META.demo_area.name,
+          center,
+          bounds: boundsOk ? b : DEFAULT_META.demo_area.bounds,
+        },
+        haptic_patterns,
+        limits,
+      };
     }
   } catch {
     // Fall back to default config
@@ -77,14 +126,60 @@ export async function fetchReports(): Promise<Report[]> {
   return getLocalReports();
 }
 
-export async function createReport(payload: NewReportPayload): Promise<Report> {
+/** A request the server understood and refused (4xx). Its message is safe to show the user. */
+export class ApiRequestError extends Error {
+  code: string;
+  status: number;
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function toApiRequestError(res: Response): Promise<ApiRequestError> {
+  let code = 'request_failed';
+  let message = `The server rejected the request (${res.status}).`;
+  let details: { field: string; issue: string }[] = [];
   try {
-    const res = await fetch(`${API_BASE}/reports`, {
+    const body = await res.json();
+    code = body?.error?.code ?? code;
+    details = Array.isArray(body?.error?.details) ? body.error.details : [];
+  } catch {
+    // Non-JSON error body; keep the generic message.
+  }
+  if (code === 'out_of_bounds') {
+    message = 'That location is outside the UMD demo area. Move the pin onto campus and try again.';
+  } else if (code === 'rate_limited') {
+    message = 'Too many reports in a short time. Please wait a minute and try again.';
+  } else if (code === 'validation_failed') {
+    message = details.length
+      ? `Please fix the report: ${details.map((d) => `${d.field} ${d.issue}`).join('; ')}.`
+      : 'The report was not valid. Check the category, location and note.';
+  }
+  return new ApiRequestError(res.status, code, message);
+}
+
+/**
+ * Submits a report. If the server refuses it (4xx) this throws an ApiRequestError so the form can
+ * show why. Only when the server cannot be reached (network failure, timeout, 5xx) does it save the
+ * report locally so the demo keeps working.
+ */
+export async function createReport(payload: NewReportPayload): Promise<Report> {
+  let res: Response | null = null;
+  try {
+    res = await fetch(`${API_BASE}/reports`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(4000),
     });
+  } catch {
+    // Backend unreachable: fall through to the local fallback below.
+  }
+
+  if (res) {
     if (res.ok) {
       const data = await res.json();
       if (data.report) {
@@ -92,9 +187,9 @@ export async function createReport(payload: NewReportPayload): Promise<Report> {
         saveLocalReports([data.report, ...local]);
         return data.report;
       }
+    } else if (res.status < 500) {
+      throw await toApiRequestError(res);
     }
-  } catch {
-    // Fallback optimistic creation
   }
 
   // Create optimistic local report
