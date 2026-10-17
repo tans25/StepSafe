@@ -174,11 +174,27 @@ export async function flagReport(id: string): Promise<Report | null> {
 
 export async function fetchRoutes(): Promise<Route[]> {
   try {
+    // GET /api/routes returns summaries only; geometry and steps come from GET /api/routes/:id.
     const res = await fetch(`${API_BASE}/routes`, { signal: AbortSignal.timeout(3000) });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.routes) && data.routes.length > 0) {
-        return data.routes;
+        const full = await Promise.all(
+          data.routes.map(async (summary: { id: string }): Promise<Route | null> => {
+            try {
+              const r = await fetch(`${API_BASE}/routes/${encodeURIComponent(summary.id)}`, {
+                signal: AbortSignal.timeout(3000),
+              });
+              if (!r.ok) return null;
+              const route = (await r.json()) as Route;
+              return route.geometry?.coordinates?.length >= 2 && Array.isArray(route.steps) ? route : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+        const usable = full.filter((r): r is Route => r !== null);
+        if (usable.length > 0) return usable;
       }
     }
   } catch {
