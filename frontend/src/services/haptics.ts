@@ -1,5 +1,12 @@
 import { DEFAULT_META } from '../config';
-import type { CueType } from '../types';
+import type { CueType, HapticPattern } from '../types';
+
+// Patterns come from the backend (/api/meta) once loaded; until then, the defaults in config.ts.
+let hapticPatterns: Record<CueType, HapticPattern> = DEFAULT_META.haptic_patterns;
+
+export function setHapticPatterns(patterns: Record<CueType, HapticPattern>): void {
+  hapticPatterns = patterns;
+}
 
 let audioCtx: AudioContext | null = null;
 
@@ -117,7 +124,7 @@ export function triggerHapticCue(
   cue: CueType,
   options: { playSoundFallback?: boolean } = { playSoundFallback: true }
 ): { vibrated: boolean; pattern: number[]; text: string } {
-  const patternInfo = DEFAULT_META.haptic_patterns[cue];
+  const patternInfo = hapticPatterns[cue];
   const pattern = patternInfo ? patternInfo.vibrate_ms : [200];
   const text = patternInfo ? patternInfo.text : cue;
 
