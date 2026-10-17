@@ -33,6 +33,13 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   const userMarkerRef = useRef<L.Marker | null>(null);
   const pendingMarkerRef = useRef<L.Marker | null>(null);
 
+  // The Leaflet click listener is attached once, so read the latest handler through a ref.
+  // Otherwise it keeps the first render's handler, which ignores clicks (not picking yet).
+  const onMapClickRef = useRef(onMapClickForReport);
+  useEffect(() => {
+    onMapClickRef.current = onMapClickForReport;
+  }, [onMapClickForReport]);
+
   // Initialize Map
   useEffect(() => {
     if (!mapElementRef.current || mapInstanceRef.current) return;
@@ -59,9 +66,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
     // Map click handler
     map.on('click', (e: L.LeafletMouseEvent) => {
-      if (onMapClickForReport) {
-        onMapClickForReport({ lat: e.latlng.lat, lng: e.latlng.lng });
-      }
+      onMapClickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng });
     });
 
     mapInstanceRef.current = map;
