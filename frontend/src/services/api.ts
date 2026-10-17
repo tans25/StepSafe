@@ -203,6 +203,27 @@ export async function fetchRoutes(): Promise<Route[]> {
   return DEMO_PREPARED_ROUTES;
 }
 
+export async function fetchRouteWarnings(
+  routeId: string,
+  bufferM = 25
+): Promise<RouteWarning[] | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/routes/${encodeURIComponent(routeId)}/warnings?buffer_m=${bufferM}`,
+      { signal: AbortSignal.timeout(3000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.warnings)) {
+        return data.warnings;
+      }
+    }
+  } catch {
+    // Fall back to client calculation
+  }
+  return null;
+}
+
 export function computeRouteWarnings(
   route: Route,
   reports: Report[],
