@@ -16,6 +16,7 @@ import {
   createReport,
   fetchReports,
   fetchRoutes,
+  fetchRouteWarnings,
   flagReport,
 } from './services/api';
 import './App.css';
@@ -93,10 +94,21 @@ export function App() {
 
   // Recalculate route warnings when route or reports change
   useEffect(() => {
-    if (activeRoute && reports.length > 0) {
-      const computed = computeRouteWarnings(activeRoute, reports);
-      setWarnings(computed);
+    let cancelled = false;
+    async function loadWarnings() {
+      if (!activeRoute) return;
+      const backendWarnings = await fetchRouteWarnings(activeRoute.id);
+      if (cancelled) return;
+      if (backendWarnings !== null) {
+        setWarnings(backendWarnings);
+      } else if (reports.length > 0) {
+        setWarnings(computeRouteWarnings(activeRoute, reports));
+      }
     }
+    loadWarnings();
+    return () => {
+      cancelled = true;
+    };
   }, [activeRoute, reports]);
 
   // Filtered reports for the map
