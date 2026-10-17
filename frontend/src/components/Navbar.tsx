@@ -1,5 +1,6 @@
 import React from 'react';
 import { Compass, Footprints, Activity, Vibrate, Radio, Info } from 'lucide-react';
+import { SHOW_SENSOR_LAB } from '../config';
 
 interface NavbarProps {
   activeTab: 'map' | 'navigation' | 'sensors';
@@ -90,15 +91,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Route Guidance</span>
           </button>
 
-          <button
-            type="button"
-            className={`tab-btn ${activeTab === 'sensors' ? 'active' : ''}`}
-            onClick={() => setActiveTab('sensors')}
-            id="tab-sensors-view"
-          >
-            <Activity size={17} />
-            <span>Sensor Lab</span>
-          </button>
+          {SHOW_SENSOR_LAB && (
+            <button
+              type="button"
+              className={`tab-btn ${activeTab === 'sensors' ? 'active' : ''}`}
+              onClick={() => setActiveTab('sensors')}
+              id="tab-sensors-view"
+            >
+              <Activity size={17} />
+              <span>Sensor Lab</span>
+            </button>
+          )}
         </nav>
 
         <div className="status-indicator-badge">

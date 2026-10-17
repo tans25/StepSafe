@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Footprints, Map as MapIcon, ShieldAlert, Users, Vibrate, X } from 'lucide-react';
+import { SHOW_SENSOR_LAB } from '../config';
 import { saveOnboardingAccepted } from '../services/onboarding';
 
 interface OnboardingScreenProps {
@@ -32,7 +33,7 @@ const DISCLAIMER_POINTS = [
   'Routes are prepared demo routes, not live guidance. They may not reflect closures, curb ramps or surface conditions.',
   'Always rely on your own judgment and surroundings. Do not look at or interact with your phone while crossing streets or moving around hazards.',
   'Your location is used to center the map and suggest a report position. It is only sent when you submit a report, as the hazard location.',
-  'Sensor Lab readings are experimental and never count as a confirmed hazard.',
+  ...(SHOW_SENSOR_LAB ? ['Sensor Lab readings are experimental and never count as a confirmed hazard.'] : []),
 ];
 
 export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ isRevisit, onFinish }) => {

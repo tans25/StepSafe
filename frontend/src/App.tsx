@@ -8,7 +8,7 @@ import { ReportDetailModal } from './components/ReportDetailModal';
 import { HapticTestModal } from './components/HapticTestModal';
 import { SensorLabModal } from './components/SensorLabModal';
 import { OnboardingScreen } from './components/OnboardingScreen';
-import { DEFAULT_META } from './config';
+import { DEFAULT_META, SHOW_SENSOR_LAB } from './config';
 import type { CategoryId, Point, Report, Route, RouteWarning } from './types';
 import {
   checkBackendHealth,
@@ -209,7 +209,7 @@ export function App() {
 
       {/* Main Content Area */}
       <main className="app-main-content">
-        {activeTab === 'sensors' ? (
+        {SHOW_SENSOR_LAB && activeTab === 'sensors' ? (
           <SensorLabModal />
         ) : (
           <div className="map-and-sidebar-layout">

@@ -1,5 +1,9 @@
 import type { AppMeta, CategoryId, Report, Route } from './types';
 
+// Sensor Lab (experimental motion sensing) is hidden for the demo but kept for future work.
+// Set to true to bring back the tab and its disclaimer line.
+export const SHOW_SENSOR_LAB = false;
+
 export const CATEGORY_INFO: Record<
   CategoryId,
   { label: string; color: string; badgeBg: string; description: string; iconName: string }
