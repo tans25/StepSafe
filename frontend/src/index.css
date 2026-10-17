@@ -1,0 +1,282 @@
+/* ==========================================================================
+   StepSafe Global Design System & Variables
+   ========================================================================== */
+
+:root {
+  /* Color Palette */
+  --bg-dark: #090d16;
+  --bg-surface: #111827;
+  --bg-card: rgba(17, 24, 39, 0.88);
+  --bg-card-hover: rgba(30, 41, 59, 0.95);
+  --bg-glass: rgba(15, 23, 42, 0.78);
+  --bg-input: #1e293b;
+
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-bright: rgba(99, 102, 241, 0.45);
+  --border-focus: #6366f1;
+
+  --text-main: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  /* Brand Accents */
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --primary-gradient: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
+  --accent-cyan: #06b6d4;
+  --accent-amber: #f59e0b;
+  --accent-emerald: #10b981;
+  --accent-rose: #ef4444;
+
+  /* Shadows & Glass */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 36px -6px rgba(0, 0, 0, 0.65), 0 8px 16px -4px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.35);
+
+  /* Fonts */
+  --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Transitions */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  transition: all 0.2s var(--ease-spring);
+}
+
+input, textarea, select {
+  font-family: inherit;
+  color: inherit;
+  outline: none;
+}
+
+/* ==========================================================================
+   Leaflet Custom Map Marker Styling
+   ========================================================================== */
+
+.custom-leaflet-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.custom-hazard-pin {
+  position: relative;
+  width: 36px;
+  height: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.25s var(--ease-spring);
+  cursor: pointer;
+}
+
+.custom-hazard-pin:hover {
+  transform: translateY(-4px) scale(1.12);
+  z-index: 999;
+}
+
+.custom-hazard-pin.selected {
+  transform: translateY(-6px) scale(1.2);
+  z-index: 1000;
+}
+
+.custom-hazard-pin.selected .pin-bubble {
+  box-shadow: 0 0 16px var(--pin-color), var(--shadow-md);
+  border-color: #ffffff;
+}
+
+.pin-bubble {
+  width: 32px;
+  height: 32px;
+  border-radius: 50% 50% 50% 6px;
+  transform: rotate(-45deg);
+  background: var(--pin-color);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.pin-symbol {
+  transform: rotate(45deg);
+  font-size: 15px;
+  user-select: none;
+}
+
+.stale-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #f59e0b;
+  color: #000;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #fff;
+  transform: rotate(45deg);
+}
+
+.custom-hazard-pin.stale .pin-bubble {
+  opacity: 0.85;
+  filter: saturate(0.7);
+}
+
+/* User Walker Marker */
+.user-walker-marker {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.walker-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #06b6d4;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 0 12px #06b6d4, var(--shadow-sm);
+  z-index: 2;
+}
+
+.radar-halo {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(6, 182, 212, 0.28);
+  border: 1px solid rgba(6, 182, 212, 0.6);
+  animation: radar-pulse 2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+  z-index: 1;
+}
+
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Route Turn Step Badges */
+.route-turn-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #1e293b;
+  border: 2px solid #6366f1;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.route-turn-badge.cue-caution {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.route-endpoint-pin {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+}
+
+.route-endpoint-pin.start {
+  background: #4f46e5;
+  border: 2px solid #a5b4fc;
+}
+
+.route-endpoint-pin.finish {
+  background: #10b981;
+  border: 2px solid #6ee7b7;
+  font-size: 15px;
+}
+
+.pending-placement-pin {
+  width: 36px;
+  height: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: bounce-pin 1.2s infinite ease-in-out;
+}
+
+.placement-bubble {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #4f46e5;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.8);
+  font-size: 17px;
+}
+
+@keyframes bounce-pin {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Dark mode Leaflet tile adjustment */
+.leaflet-container {
+  background: #090d16 !important;
+  font-family: var(--font-body) !important;
+}

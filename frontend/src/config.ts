@@ -1,0 +1,328 @@
+import type { AppMeta, CategoryId, Report, Route } from './types';
+
+export const CATEGORY_INFO: Record<
+  CategoryId,
+  { label: string; color: string; badgeBg: string; description: string; iconName: string }
+> = {
+  blocked_sidewalk: {
+    label: 'Blocked Sidewalk',
+    color: '#ef4444',
+    badgeBg: 'rgba(239, 68, 68, 0.15)',
+    description: 'Obstacle, parked scooter/car, trash cans, or blocked walkway',
+    iconName: 'Ban',
+  },
+  pothole: {
+    label: 'Pothole / Pit',
+    color: '#f97316',
+    badgeBg: 'rgba(249, 115, 22, 0.15)',
+    description: 'Deep hole or depression creating trip or wheel hazard',
+    iconName: 'AlertTriangle',
+  },
+  uneven_surface: {
+    label: 'Uneven Surface',
+    color: '#eab308',
+    badgeBg: 'rgba(234, 179, 8, 0.15)',
+    description: 'Cracked, shifted, or raised pavers, tree roots',
+    iconName: 'Footprints',
+  },
+  standing_water: {
+    label: 'Standing Water',
+    color: '#06b6d4',
+    badgeBg: 'rgba(6, 182, 212, 0.15)',
+    description: 'Deep puddle, flooding, or slick mud covering walkway',
+    iconName: 'Droplets',
+  },
+  construction_closure: {
+    label: 'Construction Closure',
+    color: '#ec4899',
+    badgeBg: 'rgba(236, 72, 153, 0.15)',
+    description: 'Detour, scaffolding, or fence blocking pedestrian route',
+    iconName: 'HardHat',
+  },
+  missing_curb_ramp: {
+    label: 'Missing Curb Ramp',
+    color: '#8b5cf6',
+    badgeBg: 'rgba(139, 92, 246, 0.15)',
+    description: 'No drop curb for wheelchair, stroller, or rolling cart',
+    iconName: 'Accessibility',
+  },
+  other: {
+    label: 'Other Hazard',
+    color: '#64748b',
+    badgeBg: 'rgba(100, 116, 139, 0.15)',
+    description: 'Low branches, missing lighting, ice, or other barrier',
+    iconName: 'HelpCircle',
+  },
+};
+
+export const DEFAULT_META: AppMeta = {
+  categories: Object.entries(CATEGORY_INFO).map(([id, info]) => ({
+    id: id as CategoryId,
+    label: info.label,
+    icon: info.iconName,
+    description: info.description,
+  })),
+  demo_area: {
+    name: 'University of Maryland, College Park',
+    center: [38.9869, -76.9426],
+    bounds: {
+      min_lat: 38.975,
+      max_lat: 39.0,
+      min_lng: -76.96,
+      max_lng: -76.925,
+    },
+  },
+  haptic_patterns: {
+    left: {
+      vibrate_ms: [150, 100, 150],
+      text: 'Turn left ahead',
+    },
+    right: {
+      vibrate_ms: [350],
+      text: 'Turn right ahead',
+    },
+    caution: {
+      vibrate_ms: [80, 50, 80, 50, 80, 50, 200],
+      text: 'Caution: Hazard reported nearby',
+    },
+    arrived: {
+      vibrate_ms: [100, 50, 100, 50, 300],
+      text: 'You have reached your destination',
+    },
+  },
+  limits: {
+    note_max_length: 280,
+    stale_after_days: 5,
+  },
+};
+
+export const SEEDED_FALLBACK_REPORTS: Report[] = [
+  {
+    id: 'rpt_seed_001',
+    category: 'construction_closure',
+    lat: 38.9876,
+    lng: -76.9419,
+    note: 'Sidewalk fenced off near building entrance with yellow barrier.',
+    created_at: new Date(Date.now() - 51 * 3600000).toISOString(),
+    status: 'unverified',
+    source: 'seed',
+    flag_count: 0,
+    confirm_count: 3,
+    is_stale: false,
+    age_hours: 51,
+  },
+  {
+    id: 'rpt_seed_002',
+    category: 'pothole',
+    lat: 38.9881,
+    lng: -76.9437,
+    note: 'Deep pothole at the crosswalk edge, trip hazard.',
+    created_at: new Date(Date.now() - 20 * 3600000).toISOString(),
+    status: 'confirmed',
+    source: 'seed',
+    flag_count: 0,
+    confirm_count: 7,
+    is_stale: false,
+    age_hours: 20,
+  },
+  {
+    id: 'rpt_seed_003',
+    category: 'standing_water',
+    lat: 38.9863,
+    lng: -76.9445,
+    note: 'Puddle after rain covers entire sidewalk width.',
+    created_at: new Date(Date.now() - 6 * 3600000).toISOString(),
+    status: 'unverified',
+    source: 'seed',
+    flag_count: 0,
+    confirm_count: 2,
+    is_stale: false,
+    age_hours: 6,
+  },
+  {
+    id: 'rpt_seed_004',
+    category: 'missing_curb_ramp',
+    lat: 38.9890,
+    lng: -76.9452,
+    note: 'No ramp at this corner; 6-inch curb step.',
+    created_at: new Date(Date.now() - 300 * 3600000).toISOString(),
+    status: 'unverified',
+    source: 'seed',
+    flag_count: 0,
+    confirm_count: 5,
+    is_stale: true,
+    age_hours: 300,
+  },
+  {
+    id: 'rpt_seed_005',
+    category: 'uneven_surface',
+    lat: 38.9858,
+    lng: -76.9431,
+    note: 'Raised concrete slab from tree root, ~2 inches up.',
+    created_at: new Date(Date.now() - 120 * 3600000).toISOString(),
+    status: 'confirmed',
+    source: 'seed',
+    flag_count: 0,
+    confirm_count: 8,
+    is_stale: false,
+    age_hours: 120,
+  },
+  {
+    id: 'rpt_seed_006',
+    category: 'blocked_sidewalk',
+    lat: 38.9872,
+    lng: -76.9460,
+    note: 'Parked electric scooters blocking accessible pathway.',
+    created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
+    status: 'unverified',
+    source: 'seed',
+    flag_count: 0,
+    confirm_count: 4,
+    is_stale: false,
+    age_hours: 3,
+  },
+  {
+    id: 'rpt_seed_007',
+    category: 'uneven_surface',
+    lat: 38.9848,
+    lng: -76.9440,
+    note: 'Cracked slab with gravel patches.',
+    created_at: new Date(Date.now() - 1100 * 3600000).toISOString(),
+    status: 'unverified',
+    source: 'seed',
+    flag_count: 1,
+    confirm_count: 1,
+    is_stale: true,
+    age_hours: 1100,
+  },
+  {
+    id: 'rpt_seed_008',
+    category: 'other',
+    lat: 38.9895,
+    lng: -76.9425,
+    note: 'Low-hanging tree branch over the pedestrian path.',
+    created_at: new Date(Date.now() - 70 * 3600000).toISOString(),
+    status: 'unverified',
+    source: 'seed',
+    flag_count: 0,
+    confirm_count: 3,
+    is_stale: false,
+    age_hours: 70,
+  },
+];
+
+export const DEMO_PREPARED_ROUTES: Route[] = [
+  {
+    id: 'rte_mckeldin_to_stamp',
+    name: 'McKeldin Mall to Stamp Student Union',
+    distance_m: 540,
+    est_minutes: 7,
+    kind: 'prepared',
+    disclaimer: 'Prepared campus demo route for Technica 2026. Watch for nearby sidewalk hazards.',
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [-76.9449, 38.9859], // Start: McKeldin steps
+        [-76.9445, 38.9864],
+        [-76.9441, 38.9868], // Corner 1
+        [-76.9440, 38.9873], // Near standing water & pothole
+        [-76.9436, 38.9877], // Corner 2
+        [-76.9431, 38.9880], // Crosswalk
+        [-76.9426, 38.9882], // Entrance to Stamp
+      ],
+    },
+    steps: [
+      {
+        index: 0,
+        cue: 'caution',
+        location: { lat: 38.9859, lng: -76.9449 },
+        trigger_radius_m: 15,
+        distance_along_m: 0,
+        instruction: 'Start walking north across McKeldin Mall walkway',
+      },
+      {
+        index: 1,
+        cue: 'right',
+        location: { lat: 38.9868, lng: -76.9441 },
+        trigger_radius_m: 20,
+        distance_along_m: 125,
+        instruction: 'Turn right toward Campus Drive walkway',
+      },
+      {
+        index: 2,
+        cue: 'caution',
+        location: { lat: 38.9873, lng: -76.9440 },
+        trigger_radius_m: 25,
+        distance_along_m: 230,
+        instruction: 'Caution: Community hazard reported nearby (pothole near crosswalk)',
+      },
+      {
+        index: 3,
+        cue: 'left',
+        location: { lat: 38.9877, lng: -76.9436 },
+        trigger_radius_m: 20,
+        distance_along_m: 350,
+        instruction: 'Turn left along Stamp Plaza pedestrian path',
+      },
+      {
+        index: 4,
+        cue: 'arrived',
+        location: { lat: 38.9882, lng: -76.9426 },
+        trigger_radius_m: 25,
+        distance_along_m: 540,
+        instruction: 'You have arrived at Stamp Student Union (South Entrance)',
+      },
+    ],
+  },
+  {
+    id: 'rte_hornbake_to_esj',
+    name: 'Hornbake Plaza to Edward St. John (ESJ)',
+    distance_m: 410,
+    est_minutes: 5,
+    kind: 'prepared',
+    disclaimer: 'Prepared campus demo route for Technica 2026. Accessible walkway with gentle incline.',
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [-76.9422, 38.9880], // Hornbake Plaza
+        [-76.9424, 38.9873],
+        [-76.9421, 38.9868],
+        [-76.9416, 38.9864], // ESJ courtyard
+      ],
+    },
+    steps: [
+      {
+        index: 0,
+        cue: 'caution',
+        location: { lat: 38.9880, lng: -76.9422 },
+        trigger_radius_m: 15,
+        distance_along_m: 0,
+        instruction: 'Head south from Hornbake Plaza toward Campus Drive',
+      },
+      {
+        index: 1,
+        cue: 'left',
+        location: { lat: 38.9873, lng: -76.9424 },
+        trigger_radius_m: 20,
+        distance_along_m: 140,
+        instruction: 'Turn left at crosswalk toward ESJ plaza',
+      },
+      {
+        index: 2,
+        cue: 'right',
+        location: { lat: 38.9868, lng: -76.9421 },
+        trigger_radius_m: 20,
+        distance_along_m: 260,
+        instruction: 'Turn right along the accessible ramp into ESJ',
+      },
+      {
+        index: 3,
+        cue: 'arrived',
+        location: { lat: 38.9864, lng: -76.9416 },
+        trigger_radius_m: 25,
+        distance_along_m: 410,
+        instruction: 'You have arrived at Edward St. John Learning and Teaching Center',
+      },
+    ],
+  },
+];
