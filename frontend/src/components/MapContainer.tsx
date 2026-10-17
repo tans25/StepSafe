@@ -13,6 +13,8 @@ interface MapContainerProps {
   pendingReportCoords: Point | null;
   onMapClickForReport?: (coords: Point) => void;
   isPickingLocation?: boolean;
+  destinationPoint?: Point | null;
+  isPickingDestination?: boolean;
 }
 
 export const MapContainer: React.FC<MapContainerProps> = ({
@@ -25,6 +27,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   pendingReportCoords,
   onMapClickForReport,
   isPickingLocation,
+  destinationPoint,
+  isPickingDestination,
 }) => {
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -32,9 +36,9 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const pendingMarkerRef = useRef<L.Marker | null>(null);
+  const destMarkerRef = useRef<L.Marker | null>(null);
 
   // The Leaflet click listener is attached once, so read the latest handler through a ref.
-  // Otherwise it keeps the first render's handler, which ignores clicks (not picking yet).
   const onMapClickRef = useRef(onMapClickForReport);
   useEffect(() => {
     onMapClickRef.current = onMapClickForReport;
@@ -254,13 +258,54 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     }
   }, [pendingReportCoords]);
 
+  // Update Destination Marker
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+
+    if (destinationPoint) {
+      const destIcon = L.divIcon({
+        className: 'custom-leaflet-marker',
+        html: `
+          <div class="destination-target-pin">
+            <div class="target-bubble">🎯</div>
+            <div class="target-pulse"></div>
+          </div>
+        `,
+        iconSize: [36, 42],
+        iconAnchor: [18, 21],
+      });
+
+      if (!destMarkerRef.current) {
+        destMarkerRef.current = L.marker([destinationPoint.lat, destinationPoint.lng], {
+          icon: destIcon,
+          zIndexOffset: 1200,
+        }).addTo(mapInstanceRef.current);
+      } else {
+        destMarkerRef.current.setLatLng([destinationPoint.lat, destinationPoint.lng]);
+      }
+    } else if (destMarkerRef.current) {
+      destMarkerRef.current.remove();
+      destMarkerRef.current = null;
+    }
+  }, [destinationPoint]);
+
   return (
-    <div className={`map-wrapper ${isPickingLocation ? 'picking-location-active' : ''}`}>
+    <div
+      className={`map-wrapper ${isPickingLocation ? 'picking-location-active' : ''} ${
+        isPickingDestination ? 'picking-destination-active' : ''
+      }`}
+    >
       <div ref={mapElementRef} className="leaflet-map-element" id="stepsafe-leaflet-map" />
 
       {isPickingLocation && (
         <div className="location-picker-banner">
-          <span>Tap on the map or drag to set the exact hazard barrier spot</span>
+          <span>Tap on the map to set the exact hazard barrier spot</span>
+        </div>
+      )}
+
+      {isPickingDestination && (
+        <div className="location-picker-banner destination-mode">
+          <span>🎯 Tap anywhere on the map to set your walking destination</span>
         </div>
       )}
     </div>

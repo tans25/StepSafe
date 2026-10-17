@@ -36,7 +36,7 @@ export interface RouteSummary {
   name: string;
   distance_m: number;
   est_minutes: number;
-  kind: 'prepared';
+  kind: 'prepared' | 'live';
   disclaimer: string;
 }
 

@@ -42,6 +42,8 @@ export function App() {
   const [isHapticTestOpen, setIsHapticTestOpen] = useState(false);
   const [isPickingLocation, setIsPickingLocation] = useState(false);
   const [pendingReportCoords, setPendingReportCoords] = useState<Point | null>(null);
+  const [isPickingDestination, setIsPickingDestination] = useState(false);
+  const [destinationPoint, setDestinationPoint] = useState<Point | null>(null);
 
   // Geolocation & Simulation
   const [userLocation, setUserLocation] = useState<Point | null>(null);
@@ -153,16 +155,20 @@ export function App() {
     return true;
   });
 
-  // Handle map click when placing report
+  // Handle map click for placing report or setting live walking destination
   const handleMapClickForReport = useCallback(
     (coords: Point) => {
-      if (isPickingLocation || isReportModalOpen) {
+      if (isPickingDestination) {
+        setDestinationPoint(coords);
+        setIsPickingDestination(false);
+        showToast('Destination set! Calculating live walking route...');
+      } else if (isPickingLocation || isReportModalOpen) {
         setPendingReportCoords(coords);
         setIsPickingLocation(false);
         setIsReportModalOpen(true);
       }
     },
-    [isPickingLocation, isReportModalOpen]
+    [isPickingDestination, isPickingLocation, isReportModalOpen]
   );
 
   // Submit new report
@@ -248,6 +254,8 @@ export function App() {
                 pendingReportCoords={pendingReportCoords}
                 onMapClickForReport={handleMapClickForReport}
                 isPickingLocation={isPickingLocation}
+                destinationPoint={destinationPoint}
+                isPickingDestination={isPickingDestination}
               />
             </div>
 
@@ -261,6 +269,13 @@ export function App() {
                   warnings={warnings}
                   onSimulationPositionChange={setSimulationPosition}
                   onSelectReport={setSelectedReport}
+                  userLocation={userLocation}
+                  onPickDestinationOnMap={() => {
+                    setIsPickingDestination(true);
+                    showToast('Tap anywhere on the map to set your walking destination.');
+                  }}
+                  isPickingDestination={isPickingDestination}
+                  destinationPoint={destinationPoint}
                 />
               </aside>
             )}
