@@ -26,6 +26,29 @@ function getAudioContext(): AudioContext | null {
 }
 
 /**
+ * Unlocks cue audio. Call from a user gesture (tap/click): iOS keeps an AudioContext silent
+ * unless it was started by one, and route cues are fired later from timers, not taps.
+ * Also asks iOS 17+ to treat this as playback audio so the Silent switch doesn't mute cues.
+ * iPhones have no web vibration at all, so these sounds are the only non-visual cue there.
+ */
+export function unlockCueAudio(): void {
+  try {
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    if (nav.audioSession) nav.audioSession.type = 'playback';
+
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    // Playing a one-sample silent buffer inside the gesture is what actually unlocks iOS audio.
+    const source = ctx.createBufferSource();
+    source.buffer = ctx.createBuffer(1, 1, 22050);
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch (err) {
+    console.warn('Audio unlock failed:', err);
+  }
+}
+
+/**
  * Checks if the browser hardware supports vibration.
  */
 export function isVibrationSupported(): boolean {
@@ -69,12 +92,13 @@ export function playSynthesizedCueSound(cue: CueType): void {
       osc2.start(now + 0.22);
       osc2.stop(now + 0.4);
     } else if (cue === 'right') {
-      // Solid lower tone buzz pulse
+      // One long falling tone (vs. left's two short rising beeps).
+      // Kept above ~500 Hz with harmonics: phone speakers barely reproduce low pure sine tones.
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(330, now);
-      osc.frequency.exponentialRampToValueAtTime(260, now + 0.35);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(660, now);
+      osc.frequency.exponentialRampToValueAtTime(520, now + 0.35);
       gain.gain.setValueAtTime(0.4, now);
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.38);
       osc.connect(gain);

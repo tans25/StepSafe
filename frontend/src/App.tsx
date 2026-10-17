@@ -21,7 +21,7 @@ import {
   fetchRouteWarnings,
   flagReport,
 } from './services/api';
-import { setHapticPatterns } from './services/haptics';
+import { setHapticPatterns, unlockCueAudio } from './services/haptics';
 import { hasAcceptedOnboarding } from './services/onboarding';
 import './App.css';
 
@@ -86,6 +86,21 @@ export function App() {
       }
     }
     init();
+  }, []);
+
+  // Unlock cue sounds on the first tap anywhere (needed on iOS, which can't vibrate from the web).
+  useEffect(() => {
+    const unlock = () => {
+      unlockCueAudio();
+      window.removeEventListener('touchend', unlock);
+      window.removeEventListener('click', unlock);
+    };
+    window.addEventListener('touchend', unlock);
+    window.addEventListener('click', unlock);
+    return () => {
+      window.removeEventListener('touchend', unlock);
+      window.removeEventListener('click', unlock);
+    };
   }, []);
 
   // Ask for location only after the disclaimer (which explains its use) is accepted.
