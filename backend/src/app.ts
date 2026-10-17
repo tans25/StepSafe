@@ -11,6 +11,7 @@ import {
   confirmReport, createReport, flagReport, getReport, ListQuerySchema, listReports,
   NewReportSchema, parseOrThrow,
 } from "./reports.js";
+import { getRoute, getRouteWarnings, listRoutes, WarningsQuerySchema } from "./routeService.js";
 import { seedDb } from "./seed.js";
 
 export function createApp(db: DB, opts: { rateLimit?: boolean } = {}) {
@@ -59,6 +60,19 @@ export function createApp(db: DB, opts: { rateLimit?: boolean } = {}) {
 
   app.post("/api/reports/:id/flag", limiter, (req, res) => {
     res.json({ report: flagReport(db, String(req.params.id)) });
+  });
+
+  app.get("/api/routes", (_req, res) => {
+    res.json({ routes: listRoutes(db) });
+  });
+
+  app.get("/api/routes/:id", (req, res) => {
+    res.json(getRoute(db, String(req.params.id)));
+  });
+
+  app.get("/api/routes/:id/warnings", (req, res) => {
+    const { buffer_m } = parseOrThrow(WarningsQuerySchema, req.query);
+    res.json(getRouteWarnings(db, String(req.params.id), buffer_m));
   });
 
   app.post("/api/admin/reset", (req, res) => {

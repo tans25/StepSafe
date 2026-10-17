@@ -5,6 +5,8 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
   dbPath: process.env.DB_PATH ?? "data/stepsafe.db",
   adminToken: process.env.ADMIN_TOKEN ?? "",
+  // Routes marked draft: true in seedRoutes.ts are only served when this is "true".
+  includeDraftRoutes: process.env.INCLUDE_DRAFT_ROUTES === "true",
 };
 
 export const CATEGORIES = [
