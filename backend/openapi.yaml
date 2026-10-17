@@ -1,0 +1,565 @@
+openapi: 3.1.0
+info:
+  title: StepSafe API
+  version: 0.1.0
+  description: |
+    Backend for StepSafe (Technica 2026): community sidewalk-hazard reports and prepared
+    walking routes for the University of Maryland, College Park demo area.
+
+    ## Rules for clients and AI agents (read first)
+    - This file is the single source of truth for the API contract. If code and this file disagree, fix one of them; do not guess.
+    - Base URL in development: `http://localhost:3001`. All paths below are prefixed with `/api`.
+    - All bodies are JSON (`Content-Type: application/json`). All timestamps are ISO 8601 UTC strings.
+    - Coordinates are WGS84. Always `lat` (latitude, -90..90) then `lng` (longitude, -180..180).
+      GeoJSON geometry elsewhere uses `[lng, lat]` order; only `RouteGeometry.coordinates` does this, and it is called out there.
+    - Distances are metres. `bbox` is `minLng,minLat,maxLng,maxLat`.
+    - Every error uses the `Error` schema. Branch on `error.code`, never on `error.message`.
+    - Reports are community-submitted and UNVERIFIED unless `status` says otherwise. Clients must not present them as confirmed facts.
+      Routes are prepared demo routes, not live or accessibility-verified guidance. Clients must show `disclaimer` text where given.
+    - No authentication for public endpoints. Admin endpoints need header `X-Admin-Token`.
+    - The API never accepts or stores names, contact details, device IDs, or location history.
+    - Sensor/motion data never creates a report. There is no endpoint that does so.
+servers:
+  - url: http://localhost:3001
+    description: Local development
+tags:
+  - name: meta
+    description: Health and static configuration shared by client and server.
+  - name: reports
+    description: Community hazard reports.
+  - name: routes
+    description: Prepared walking routes and hazard warnings along them.
+  - name: admin
+    description: Demo-management endpoints. Require X-Admin-Token.
+paths:
+  /api/health:
+    get:
+      tags: [meta]
+      operationId: getHealth
+      summary: Liveness check
+      responses:
+        "200":
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, mode, time]
+                properties:
+                  ok: { type: boolean, const: true }
+                  mode:
+                    type: string
+                    enum: [live, seeded]
+                    description: "`seeded` when the database only contains seed data and no user submissions."
+                  time: { type: string, format: date-time }
+              example: { ok: true, mode: seeded, time: "2026-10-17T18:00:00Z" }
+  /api/meta:
+    get:
+      tags: [meta]
+      operationId: getMeta
+      summary: Categories, demo bounds, and haptic pattern definitions
+      description: |
+        Call once at app start. The client must take categories, bounds, and haptic patterns from here
+        instead of hard-coding them, so there is one source of truth.
+      responses:
+        "200":
+          description: Static configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Meta" }
+              example:
+                categories:
+                  - { id: blocked_sidewalk, label: Blocked sidewalk }
+                  - { id: pothole, label: Pothole }
+                  - { id: uneven_surface, label: Uneven surface }
+                  - { id: standing_water, label: Standing water }
+                  - { id: construction_closure, label: Construction / closure }
+                  - { id: missing_curb_ramp, label: Missing curb ramp }
+                  - { id: other, label: Other }
+                demo_area:
+                  name: University of Maryland, College Park
+                  center: { lat: 38.9869, lng: -76.9426 }
+                  bounds: { min_lat: 38.975, min_lng: -76.96, max_lat: 39.0, max_lng: -76.925 }
+                haptic_patterns:
+                  left: { vibrate_ms: [200, 100, 200], text: Turn left }
+                  right: { vibrate_ms: [500], text: Turn right }
+                  caution: { vibrate_ms: [100, 50, 100, 50, 100, 50, 100], text: Caution ahead }
+                  arrived: { vibrate_ms: [100, 100, 500], text: You have arrived }
+                limits: { note_max_length: 280, stale_after_days: 30 }
+  /api/reports:
+    get:
+      tags: [reports]
+      operationId: listReports
+      summary: List hazard reports
+      description: Returns reports newest first. Hidden/dismissed reports are excluded unless `include_hidden=true`.
+      parameters:
+        - name: bbox
+          in: query
+          description: "Only reports inside this box. Format `minLng,minLat,maxLng,maxLat`."
+          schema: { type: string, examples: ["-76.96,38.975,-76.925,39.0"] }
+        - name: category
+          in: query
+          description: Repeatable or comma-separated list of category ids.
+          schema: { type: array, items: { $ref: "#/components/schemas/CategoryId" } }
+          style: form
+          explode: false
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/ReportStatus" }
+        - name: near
+          in: query
+          description: "`lat,lng` centre for a radius search. Requires `radius_m`."
+          schema: { type: string, examples: ["38.9869,-76.9426"] }
+        - name: radius_m
+          in: query
+          schema: { type: number, minimum: 1, maximum: 5000 }
+        - name: include_stale
+          in: query
+          description: When false, drops reports where `is_stale` is true. Default true.
+          schema: { type: boolean, default: true }
+        - name: include_hidden
+          in: query
+          schema: { type: boolean, default: false }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        "200":
+          description: Matching reports.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reports, count, disclaimer]
+                properties:
+                  reports:
+                    type: array
+                    items: { $ref: "#/components/schemas/Report" }
+                  count: { type: integer }
+                  disclaimer:
+                    type: string
+                    description: Show to users near the report list.
+              example:
+                reports:
+                  - id: rpt_seed_001
+                    category: construction_closure
+                    lat: 38.9876
+                    lng: -76.9419
+                    note: Sidewalk fenced off near the building entrance.
+                    created_at: "2026-10-15T14:20:00Z"
+                    status: unverified
+                    source: seed
+                    flag_count: 0
+                    confirm_count: 0
+                    is_stale: false
+                    age_hours: 51
+                count: 1
+                disclaimer: Community-submitted and possibly outdated. Not a guarantee of accessibility or safety.
+        "400": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [reports]
+      operationId: createReport
+      summary: Submit a hazard report
+      description: |
+        The client should let the user review and correct the location before calling this.
+        Created reports always start with `status: unverified` and `source: user`.
+        Coordinates must be inside `demo_area.bounds` or the call fails with `out_of_bounds`.
+        A near-duplicate (same category within 15 m, last 24 h) is not rejected; the response
+        includes it in `possible_duplicate_of` so the UI can offer to confirm that report instead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewReport" }
+            example:
+              category: pothole
+              lat: 38.9881
+              lng: -76.9437
+              note: Deep pothole at the crosswalk edge.
+      responses:
+        "201":
+          description: Report created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+                  possible_duplicate_of:
+                    type: array
+                    items: { type: string }
+                    description: IDs of existing nearby reports of the same category.
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/reports/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ReportId"
+    get:
+      tags: [reports]
+      operationId: getReport
+      summary: Get one report
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/reports/{id}/confirm:
+    post:
+      tags: [reports]
+      operationId: confirmReport
+      summary: Say "this hazard is still there"
+      description: Stretch goal. Increments `confirm_count`. Does not change `status` to verified by itself.
+      parameters:
+        - $ref: "#/components/parameters/ReportId"
+      responses:
+        "200":
+          description: Updated report.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/reports/{id}/flag:
+    post:
+      tags: [reports]
+      operationId: flagReport
+      summary: Flag a report as wrong, resolved, or abusive
+      description: |
+        Stretch goal. Increments `flag_count`. When `flag_count` reaches 3 the report's status becomes `hidden`.
+      parameters:
+        - $ref: "#/components/parameters/ReportId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, enum: [inaccurate, resolved, duplicate, abusive] }
+      responses:
+        "200":
+          description: Updated report.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /api/routes:
+    get:
+      tags: [routes]
+      operationId: listRoutes
+      summary: List prepared demo routes
+      responses:
+        "200":
+          description: Route summaries without geometry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [routes]
+                properties:
+                  routes:
+                    type: array
+                    items: { $ref: "#/components/schemas/RouteSummary" }
+  /api/routes/{id}:
+    get:
+      tags: [routes]
+      operationId: getRoute
+      summary: Get a route with geometry and turn steps
+      description: |
+        Each step carries the cue the client should fire when the walker comes within `trigger_radius_m`
+        of `location`. The backend does NOT push cues; the client compares its own geolocation to the next step.
+      parameters:
+        - $ref: "#/components/parameters/RouteId"
+      responses:
+        "200":
+          description: The route.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Route" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/routes/{id}/warnings:
+    get:
+      tags: [routes]
+      operationId: getRouteWarnings
+      summary: Reports near a route, in walking order
+      description: |
+        Returns reports within `buffer_m` of the route line, each with the distance along the route
+        (`distance_along_m`) and how far off the line it is (`offset_m`), sorted by `distance_along_m`.
+        Hidden reports are excluded. Stale reports are included but flagged.
+      parameters:
+        - $ref: "#/components/parameters/RouteId"
+        - name: buffer_m
+          in: query
+          schema: { type: number, minimum: 1, maximum: 200, default: 25 }
+      responses:
+        "200":
+          description: Warnings ordered along the route.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [route_id, buffer_m, warnings]
+                properties:
+                  route_id: { type: string }
+                  buffer_m: { type: number }
+                  warnings:
+                    type: array
+                    items: { $ref: "#/components/schemas/RouteWarning" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/admin/reset:
+    post:
+      tags: [admin]
+      operationId: resetDemoData
+      summary: Wipe the database and reload seed data
+      description: Demo recovery. Requires header `X-Admin-Token` equal to env `ADMIN_TOKEN`.
+      security:
+        - AdminToken: []
+      responses:
+        "200":
+          description: Database reset.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, reports_seeded, routes_seeded]
+                properties:
+                  ok: { type: boolean }
+                  reports_seeded: { type: integer }
+                  routes_seeded: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+components:
+  securitySchemes:
+    AdminToken:
+      type: apiKey
+      in: header
+      name: X-Admin-Token
+  parameters:
+    ReportId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, examples: [rpt_seed_001] }
+    RouteId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, examples: [rte_campus_demo_1] }
+  responses:
+    ValidationError:
+      description: Request failed validation. `error.details` lists each bad field.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error:
+              code: validation_failed
+              message: Invalid request body.
+              details: [{ field: category, issue: "must be one of the category ids from /api/meta" }]
+    NotFound:
+      description: No such resource.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: not_found, message: Report not found. } }
+    Unauthorized:
+      description: Missing or wrong admin token.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: unauthorized, message: Admin token required. } }
+    RateLimited:
+      description: Too many requests from this client. Retry after the `Retry-After` header (seconds).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: rate_limited, message: Too many requests. } }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [validation_failed, out_of_bounds, not_found, unauthorized, rate_limited, internal_error]
+            message: { type: string, description: Human-readable; not stable. }
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  issue: { type: string }
+    CategoryId:
+      type: string
+      enum: [blocked_sidewalk, pothole, uneven_surface, standing_water, construction_closure, missing_curb_ramp, other]
+    ReportStatus:
+      type: string
+      enum: [unverified, confirmed, resolved, hidden]
+      description: |
+        `unverified` is the default for every new report. `confirmed` and `resolved` are set only through the admin/moderation path.
+        `hidden` is set automatically after 3 flags.
+    Point:
+      type: object
+      required: [lat, lng]
+      properties:
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+    NewReport:
+      type: object
+      required: [category, lat, lng]
+      additionalProperties: false
+      properties:
+        category: { $ref: "#/components/schemas/CategoryId" }
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+        note:
+          type: string
+          maxLength: 280
+          description: Optional. Do not include personal details; the server does not scan for them.
+    Report:
+      type: object
+      required: [id, category, lat, lng, created_at, status, source, flag_count, confirm_count, is_stale, age_hours]
+      properties:
+        id: { type: string }
+        category: { $ref: "#/components/schemas/CategoryId" }
+        lat: { type: number }
+        lng: { type: number }
+        note: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/ReportStatus" }
+        source:
+          type: string
+          enum: [seed, user]
+          description: "`seed` means demo data; the UI should label it as such."
+        flag_count: { type: integer }
+        confirm_count: { type: integer }
+        is_stale:
+          type: boolean
+          description: True when older than `limits.stale_after_days` from /api/meta. Computed at read time.
+        age_hours: { type: integer, description: Whole hours since `created_at`, computed at read time. }
+    Meta:
+      type: object
+      required: [categories, demo_area, haptic_patterns, limits]
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id: { $ref: "#/components/schemas/CategoryId" }
+              label: { type: string }
+        demo_area:
+          type: object
+          required: [name, center, bounds]
+          properties:
+            name: { type: string }
+            center: { $ref: "#/components/schemas/Point" }
+            bounds:
+              type: object
+              required: [min_lat, min_lng, max_lat, max_lng]
+              properties:
+                min_lat: { type: number }
+                min_lng: { type: number }
+                max_lat: { type: number }
+                max_lng: { type: number }
+        haptic_patterns:
+          type: object
+          description: |
+            Keyed by `CueType`. `vibrate_ms` is passed directly to `navigator.vibrate()`:
+            alternating vibrate/pause durations in milliseconds, starting with a vibration.
+            `text` is the required visual/text alternative shown whenever the cue fires.
+          additionalProperties:
+            type: object
+            required: [vibrate_ms, text]
+            properties:
+              vibrate_ms:
+                type: array
+                items: { type: integer, minimum: 0 }
+              text: { type: string }
+        limits:
+          type: object
+          properties:
+            note_max_length: { type: integer }
+            stale_after_days: { type: integer }
+    CueType:
+      type: string
+      enum: [left, right, caution, arrived]
+    RouteSummary:
+      type: object
+      required: [id, name, distance_m, est_minutes, kind, disclaimer]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        distance_m: { type: number }
+        est_minutes: { type: integer, description: Walking time at about 1.3 m/s. }
+        kind:
+          type: string
+          enum: [prepared]
+          description: Always `prepared` in v0.1. The UI must label it a prepared demo route.
+        disclaimer: { type: string }
+    Route:
+      allOf:
+        - $ref: "#/components/schemas/RouteSummary"
+        - type: object
+          required: [geometry, steps]
+          properties:
+            geometry: { $ref: "#/components/schemas/RouteGeometry" }
+            steps:
+              type: array
+              items: { $ref: "#/components/schemas/RouteStep" }
+    RouteGeometry:
+      type: object
+      description: GeoJSON LineString. Note coordinates are `[lng, lat]`, the reverse of every other field in this API.
+      required: [type, coordinates]
+      properties:
+        type: { type: string, const: LineString }
+        coordinates:
+          type: array
+          items:
+            type: array
+            prefixItems: [{ type: number }, { type: number }]
+            minItems: 2
+            maxItems: 2
+    RouteStep:
+      type: object
+      required: [index, cue, location, trigger_radius_m, distance_along_m, instruction]
+      properties:
+        index: { type: integer, description: Zero-based order along the route. }
+        cue: { $ref: "#/components/schemas/CueType" }
+        location: { $ref: "#/components/schemas/Point" }
+        trigger_radius_m:
+          type: number
+          description: Fire the cue when the walker is within this distance of `location`. Typically 15 to 25.
+        distance_along_m: { type: number }
+        instruction:
+          type: string
+          description: Text equivalent of the cue, e.g. "Turn left onto Campus Drive".
+    RouteWarning:
+      type: object
+      required: [report, distance_along_m, offset_m]
+      properties:
+        report: { $ref: "#/components/schemas/Report" }
+        distance_along_m: { type: number, description: Distance from route start to the closest point on the line. }
+        offset_m: { type: number, description: Perpendicular distance from the route line. }
+        cue: { $ref: "#/components/schemas/CueType", description: Always `caution` in v0.1. }
