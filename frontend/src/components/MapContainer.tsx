@@ -69,6 +69,10 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     return () => {
       map.remove();
       mapInstanceRef.current = null;
+      // map.remove() also drops these markers; forget them so the next map recreates them
+      // (otherwise React StrictMode / remounts leave us moving markers on a dead map).
+      userMarkerRef.current = null;
+      pendingMarkerRef.current = null;
     };
   }, []);
 
