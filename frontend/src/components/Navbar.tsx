@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Footprints, Activity, Vibrate, Radio } from 'lucide-react';
+import { Compass, Footprints, Activity, Vibrate, Radio, Info } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'map' | 'navigation' | 'sensors';
@@ -7,6 +7,7 @@ interface NavbarProps {
   isBackendLive: boolean;
   onOpenHapticTest: () => void;
   onOpenReportModal: () => void;
+  onOpenAbout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,6 +16,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isBackendLive,
   onOpenHapticTest,
   onOpenReportModal,
+  onOpenAbout,
 }) => {
   return (
     <header className="navbar-container">
@@ -30,6 +32,18 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         <div className="navbar-actions">
+          <button
+            type="button"
+            className="action-pill-btn"
+            onClick={onOpenAbout}
+            title="About StepSafe and safety disclaimer"
+            aria-label="About StepSafe and safety disclaimer"
+            id="about-btn"
+          >
+            <Info size={16} />
+            <span className="btn-label-desktop">About</span>
+          </button>
+
           <button
             type="button"
             className="action-pill-btn haptic-test-btn"

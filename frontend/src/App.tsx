@@ -7,6 +7,7 @@ import { ReportModal } from './components/ReportModal';
 import { ReportDetailModal } from './components/ReportDetailModal';
 import { HapticTestModal } from './components/HapticTestModal';
 import { SensorLabModal } from './components/SensorLabModal';
+import { OnboardingScreen } from './components/OnboardingScreen';
 import { DEFAULT_META } from './config';
 import type { CategoryId, Point, Report, Route, RouteWarning } from './types';
 import {
@@ -21,6 +22,7 @@ import {
   flagReport,
 } from './services/api';
 import { setHapticPatterns } from './services/haptics';
+import { hasAcceptedOnboarding } from './services/onboarding';
 import './App.css';
 
 export function App() {
@@ -46,6 +48,14 @@ export function App() {
   const [simulationPosition, setSimulationPosition] = useState<Point | null>(null);
   const [isBackendLive, setIsBackendLive] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Intro + disclaimer: shown until accepted once, re-openable from the navbar.
+  const [hasOnboarded, setHasOnboarded] = useState(hasAcceptedOnboarding);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(!hasOnboarded);
+  const closeOnboarding = useCallback(() => {
+    setIsOnboardingOpen(false);
+    setHasOnboarded(true);
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -76,8 +86,11 @@ export function App() {
       }
     }
     init();
+  }, []);
 
-    // Try acquiring initial user position if permitted
+  // Ask for location only after the disclaimer (which explains its use) is accepted.
+  useEffect(() => {
+    if (!hasOnboarded) return;
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -96,7 +109,7 @@ export function App() {
         { timeout: 6000 }
       );
     }
-  }, []);
+  }, [hasOnboarded]);
 
   // Recalculate route warnings when route or reports change
   useEffect(() => {
@@ -176,13 +189,16 @@ export function App() {
   };
 
   return (
-    <div className="app-root-layout">
+    <>
+    {/* inert keeps keyboard and screen-reader focus out of the app while the intro is open */}
+    <div className="app-root-layout" inert={isOnboardingOpen}>
       {/* Top Navigation */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isBackendLive={isBackendLive}
         onOpenHapticTest={() => setIsHapticTestOpen(true)}
+        onOpenAbout={() => setIsOnboardingOpen(true)}
         onOpenReportModal={() => {
           if (!pendingReportCoords && userLocation) {
             setPendingReportCoords(userLocation);
@@ -276,6 +292,10 @@ export function App() {
         </div>
       )}
     </div>
+
+    {/* Intro & Disclaimer */}
+    {isOnboardingOpen && <OnboardingScreen isRevisit={hasOnboarded} onFinish={closeOnboarding} />}
+    </>
   );
 }
 
