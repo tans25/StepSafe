@@ -8,6 +8,12 @@ export function setHapticPatterns(patterns: Record<CueType, HapticPattern>): voi
   hapticPatterns = patterns;
 }
 
+/** Human-readable timing of a cue's vibration, e.g. "200ms on · 100ms off · 200ms on". */
+export function describeHapticPattern(cue: CueType): string {
+  const ms = hapticPatterns[cue]?.vibrate_ms ?? [];
+  return ms.map((d, i) => `${d}ms ${i % 2 === 0 ? 'on' : 'off'}`).join(' · ');
+}
+
 let audioCtx: AudioContext | null = null;
 
 function getAudioContext(): AudioContext | null {

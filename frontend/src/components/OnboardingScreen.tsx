@@ -13,7 +13,7 @@ const FEATURES = [
   {
     icon: Vibrate,
     title: 'Feel your turns',
-    text: 'Distinct vibration patterns for left, right and caution, with on-screen text and sound alternatives.',
+    text: 'Distinct vibration patterns for left, right and caution, with on-screen text and sound alternatives. iPhones play the sounds only, since iPhone browsers cannot vibrate.',
   },
   {
     icon: MapIcon,
@@ -30,9 +30,10 @@ const FEATURES = [
 const DISCLAIMER_POINTS = [
   'StepSafe is a hackathon prototype for a small campus demo area. It is not a replacement for established navigation or accessibility services.',
   'Hazard reports are community-submitted and may be incomplete, inaccurate or out of date.',
-  'Routes are prepared demo routes, not live guidance. They may not reflect closures, curb ramps or surface conditions.',
+  'StepSafe only covers the University of Maryland, College Park campus.',
+  'Walking routes come from OpenStreetMap data or are prepared demo routes. They may not reflect closures, curb ramps or surface conditions.',
   'Always rely on your own judgment and surroundings. Do not look at or interact with your phone while crossing streets or moving around hazards.',
-  'Your location is used to center the map and suggest a report position. It is only sent when you submit a report, as the hazard location.',
+  'Your location centers the map and suggests a report position. It is sent to StepSafe when you submit a report (as the hazard location), and your start point and search text go to OpenStreetMap services when you ask for a walking route.',
   ...(SHOW_SENSOR_LAB ? ['Sensor Lab readings are experimental and never count as a confirmed hazard.'] : []),
 ];
 

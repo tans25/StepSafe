@@ -16,6 +16,10 @@ import { seedDb } from "./seed.js";
 
 export function createApp(db: DB, opts: { rateLimit?: boolean } = {}) {
   const app = express();
+  // Requests reach us through the local Vite proxy (and a tunnel for phones), so they all come
+  // from 127.0.0.1. Trusting loopback proxies makes req.ip the real client from X-Forwarded-For,
+  // so the rate limit applies per user instead of to everyone at once.
+  app.set("trust proxy", "loopback");
   app.use(cors({ origin: config.corsOrigin }));
   app.use(express.json({ limit: "10kb" }));
 

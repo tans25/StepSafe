@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CATEGORY_INFO } from '../config';
+import { isLocalOnlyReport } from '../services/api';
 import { formatRelativeTime } from '../services/geo';
 import type { Report } from '../types';
 import { X, ThumbsUp, Flag, Clock, AlertTriangle, CheckCircle, Shield } from 'lucide-react';
@@ -75,7 +76,7 @@ export const ReportDetailModal: React.FC<ReportDetailModalProps> = ({
             {report.is_stale ? (
               <span className="detail-meta-chip stale-badge">
                 <AlertTriangle size={13} />
-                <span>Stale (&gt;5 days old)</span>
+                <span>Stale: may be outdated</span>
               </span>
             ) : (
               <span className="detail-meta-chip verified-badge">
@@ -86,9 +87,21 @@ export const ReportDetailModal: React.FC<ReportDetailModalProps> = ({
 
             <span className="detail-meta-chip source-badge">
               <Shield size={13} />
-              <span>{report.source === 'seed' ? 'Campus Seed Data' : 'Live Walker Report'}</span>
+              <span>
+                {report.source === 'seed'
+                  ? 'Sample Demo Data'
+                  : isLocalOnlyReport(report)
+                    ? 'Saved on This Device Only'
+                    : 'Live Walker Report'}
+              </span>
             </span>
           </div>
+
+          {report.source === 'seed' && (
+            <p className="detail-sample-note">
+              Sample report for the demo. It does not describe a real, verified sidewalk condition.
+            </p>
+          )}
 
           <div className="detail-note-box">
             <p className="detail-note-text">

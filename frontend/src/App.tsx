@@ -8,7 +8,7 @@ import { ReportDetailModal } from './components/ReportDetailModal';
 import { HapticTestModal } from './components/HapticTestModal';
 import { SensorLabModal } from './components/SensorLabModal';
 import { OnboardingScreen } from './components/OnboardingScreen';
-import { DEFAULT_META, SHOW_SENSOR_LAB } from './config';
+import { SHOW_SENSOR_LAB } from './config';
 import type { CategoryId, Point, Report, Route, RouteWarning } from './types';
 import {
   checkBackendHealth,
@@ -20,8 +20,10 @@ import {
   fetchRoutes,
   fetchRouteWarnings,
   flagReport,
+  isLocalOnlyReport,
 } from './services/api';
 import { setHapticPatterns, unlockCueAudio } from './services/haptics';
+import { isInDemoArea } from './services/routing';
 import { hasAcceptedOnboarding } from './services/onboarding';
 import './App.css';
 
@@ -117,11 +119,9 @@ export function App() {
           });
         },
         () => {
-          // Default to UMD campus center if declined
-          setUserLocation({
-            lat: DEFAULT_META.demo_area.center[0],
-            lng: DEFAULT_META.demo_area.center[1],
-          });
+          // Declined or unavailable: leave it unknown rather than faking a position. The map
+          // shows no "you are here" dot, reports default to the campus center, and live routes
+          // start from McKeldin Library and say so.
         },
         { timeout: 6000 }
       );
@@ -159,9 +159,13 @@ export function App() {
   const handleMapClickForReport = useCallback(
     (coords: Point) => {
       if (isPickingDestination) {
-        setDestinationPoint(coords);
         setIsPickingDestination(false);
-        showToast('Destination set! Calculating live walking route...');
+        if (!isInDemoArea(coords)) {
+          showToast('That spot is outside the UMD demo area. Pick a destination on campus.');
+          return;
+        }
+        setDestinationPoint(coords);
+        showToast('Destination set! Calculating walking route...');
       } else if (isPickingLocation || isReportModalOpen) {
         setPendingReportCoords(coords);
         setIsPickingLocation(false);
@@ -181,7 +185,11 @@ export function App() {
     const created = await createReport(data);
     setReports((prev) => [created, ...prev]);
     setPendingReportCoords(null);
-    showToast('Hazard barrier submitted! Thank you for helping accessible navigation.');
+    showToast(
+      isLocalOnlyReport(created)
+        ? "Saved on this device only: the server can't be reached, so other people won't see this report."
+        : 'Hazard barrier submitted! Thank you for helping accessible navigation.'
+    );
   };
 
   // Confirm report
@@ -235,7 +243,7 @@ export function App() {
         ) : (
           <div className="map-and-sidebar-layout">
             {/* Map Area */}
-            <div className="map-section-pane">
+            <div className={`map-section-pane ${activeTab === 'navigation' ? 'nav-active' : ''}`}>
               <FilterBar
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
@@ -276,6 +284,7 @@ export function App() {
                   }}
                   isPickingDestination={isPickingDestination}
                   destinationPoint={destinationPoint}
+                  onClearDestination={() => setDestinationPoint(null)}
                 />
               </aside>
             )}
@@ -303,6 +312,7 @@ export function App() {
 
       {/* Report Detail & Confirmation Modal */}
       <ReportDetailModal
+        key={selectedReport?.id ?? 'none'}
         report={selectedReport}
         onClose={() => setSelectedReport(null)}
         onConfirm={handleConfirmReport}

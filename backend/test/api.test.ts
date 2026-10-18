@@ -72,3 +72,34 @@ describe("admin", () => {
     expect((await request(app).post("/api/admin/reset")).status).toBe(401);
   });
 });
+
+describe("seeding", () => {
+  it("keeps user reports when asked, and removes them on a full reset", async () => {
+    const db = openDb(":memory:");
+    seedDb(db);
+    const a = createApp(db, { rateLimit: false });
+    await request(a).post("/api/reports").send({ category: "pothole", lat: 38.987, lng: -76.943 });
+
+    seedDb(db, { keepUserReports: true });
+    expect((await request(a).get("/api/reports")).body.count).toBe(11);
+
+    seedDb(db);
+    expect((await request(a).get("/api/reports")).body.count).toBe(10);
+  });
+});
+
+describe("rate limit", () => {
+  it("counts each forwarded client separately behind the local proxy", async () => {
+    const db = openDb(":memory:");
+    seedDb(db);
+    const limited = createApp(db);
+    const post = (ip: string) =>
+      request(limited)
+        .post("/api/reports/rpt_seed_002/confirm")
+        .set("X-Forwarded-For", ip);
+
+    for (let i = 0; i < 20; i++) expect((await post("203.0.113.1")).status).toBe(200);
+    expect((await post("203.0.113.1")).status).toBe(429);
+    expect((await post("203.0.113.2")).status).toBe(200);
+  });
+});

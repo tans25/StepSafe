@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { isVibrationSupported, triggerHapticCue } from '../services/haptics';
+import { describeHapticPattern, isVibrationSupported, triggerHapticCue } from '../services/haptics';
 import type { CueType } from '../types';
 import { X, Vibrate, Volume2, CheckCircle2, ArrowUpLeft, ArrowUpRight, AlertTriangle, Flag, Sparkles } from 'lucide-react';
 
@@ -83,10 +83,10 @@ export const HapticTestModal: React.FC<HapticTestModalProps> = ({ isOpen, onClos
               </div>
               <div className="cue-type-info">
                 <h3>Left Turn Cue</h3>
-                <span className="timing-spec">Pattern: 150ms vib · 100ms pause · 150ms vib</span>
+                <span className="timing-spec">Pattern: {describeHapticPattern('left')}</span>
               </div>
             </div>
-            <p className="cue-purpose-text">Two rapid pulses signaling a left turn ahead.</p>
+            <p className="cue-purpose-text">Two pulses signaling a left turn ahead.</p>
             <button
               type="button"
               className="test-trigger-btn"
@@ -106,10 +106,10 @@ export const HapticTestModal: React.FC<HapticTestModalProps> = ({ isOpen, onClos
               </div>
               <div className="cue-type-info">
                 <h3>Right Turn Cue</h3>
-                <span className="timing-spec">Pattern: 350ms steady vibration</span>
+                <span className="timing-spec">Pattern: {describeHapticPattern('right')}</span>
               </div>
             </div>
-            <p className="cue-purpose-text">One continuous longer vibration for right turns.</p>
+            <p className="cue-purpose-text">One long, steady vibration for right turns.</p>
             <button
               type="button"
               className="test-trigger-btn"
@@ -129,10 +129,10 @@ export const HapticTestModal: React.FC<HapticTestModalProps> = ({ isOpen, onClos
               </div>
               <div className="cue-type-info">
                 <h3>Caution / Barrier Ahead</h3>
-                <span className="timing-spec">Pattern: 3 rapid bursts + solid warning pulse</span>
+                <span className="timing-spec">Pattern: {describeHapticPattern('caution')}</span>
               </div>
             </div>
-            <p className="cue-purpose-text">Urgent staccato buzz warning of a sidewalk barrier.</p>
+            <p className="cue-purpose-text">Rapid bursts warning of a reported sidewalk barrier.</p>
             <button
               type="button"
               className="test-trigger-btn"
@@ -152,10 +152,10 @@ export const HapticTestModal: React.FC<HapticTestModalProps> = ({ isOpen, onClos
               </div>
               <div className="cue-type-info">
                 <h3>Destination Reached</h3>
-                <span className="timing-spec">Pattern: Double pulse + extended celebratory hum</span>
+                <span className="timing-spec">Pattern: {describeHapticPattern('arrived')}</span>
               </div>
             </div>
-            <p className="cue-purpose-text">Celebratory chime confirming arrival at endpoint.</p>
+            <p className="cue-purpose-text">A short pulse then a long one confirming arrival.</p>
             <button
               type="button"
               className="test-trigger-btn"

@@ -64,7 +64,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             id="report-hazard-header-btn"
           >
             <span className="plus-symbol">+</span>
-            <span>Report Barrier</span>
+            <span>Report<span className="btn-label-desktop"> Barrier</span></span>
           </button>
         </div>
       </div>

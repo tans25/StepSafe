@@ -1,5 +1,6 @@
+import { DEFAULT_META } from '../config';
 import type { CueType, Point, Route, RouteStep } from '../types';
-import { haversineDistanceM } from './geo';
+import { haversineDistanceM, isInBounds } from './geo';
 
 export interface CampusLandmark {
   name: string;
@@ -89,61 +90,67 @@ export const POPULAR_CAMPUS_LANDMARKS: CampusLandmark[] = [
   },
 ];
 
+export interface PlaceResult {
+  name: string;
+  subtitle?: string;
+  lat: number;
+  lng: number;
+}
+
+/** True if a point is inside the demo area (reports, hazards and routing are limited to it). */
+export function isInDemoArea(p: Point): boolean {
+  return isInBounds(p, DEFAULT_META.demo_area.bounds);
+}
+
+/** Instant, offline search over the built-in campus landmarks (safe to run on every keystroke). */
+export function searchLandmarks(query: string): PlaceResult[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return POPULAR_CAMPUS_LANDMARKS.filter(
+    (l) => l.name.toLowerCase().includes(q) || l.category.toLowerCase().includes(q)
+  ).map((l) => ({ name: l.name, subtitle: l.category, lat: l.lat, lng: l.lng }));
+}
+
 /**
- * Searches campus landmarks and OpenStreetMap Nominatim for locations.
+ * Searches OpenStreetMap Nominatim, restricted to the demo area.
+ * Nominatim's usage policy forbids search-as-you-type, so call this only on an explicit
+ * search (Enter / button), never from a keystroke handler.
  */
-export async function searchLocations(
-  query: string
-): Promise<{ name: string; lat: number; lng: number; subtitle?: string }[]> {
-  const cleanQ = query.trim().toLowerCase();
-  if (!cleanQ) return [];
+export async function searchPlaces(query: string): Promise<PlaceResult[]> {
+  const q = query.trim();
+  if (q.length < 3) return [];
 
-  // Match local landmarks first for instant response
-  const localMatches = POPULAR_CAMPUS_LANDMARKS.filter(
-    (l) => l.name.toLowerCase().includes(cleanQ) || l.category.toLowerCase().includes(cleanQ)
-  ).map((l) => ({
-    name: l.name,
-    lat: l.lat,
-    lng: l.lng,
-    subtitle: l.category,
-  }));
+  const b = DEFAULT_META.demo_area.bounds;
+  const params = new URLSearchParams({
+    format: 'json',
+    q,
+    limit: '6',
+    viewbox: `${b.min_lng},${b.max_lat},${b.max_lng},${b.min_lat}`,
+    bounded: '1',
+  });
 
-  if (cleanQ.length < 3) {
-    return localMatches;
-  }
-
-  // Also query OpenStreetMap Nominatim (scoped to College Park / UMD area)
   try {
-    const encoded = encodeURIComponent(`${query} College Park`);
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}&limit=5`,
-      {
-        headers: { 'User-Agent': 'StepSafeAccessibleNav/1.0' },
-        signal: AbortSignal.timeout(3000),
-      }
-    );
-    if (res.ok) {
-      const places = await res.json();
-      if (Array.isArray(places)) {
-        const osmResults = places.map((p: { display_name: string; lat: string; lon: string }) => {
-          const parts = p.display_name.split(',');
-          return {
-            name: parts[0],
-            subtitle: parts.slice(1, 3).join(',').trim(),
-            lat: parseFloat(p.lat),
-            lng: parseFloat(p.lon),
-          };
-        });
-
-        // Combine and dedup
-        return [...localMatches, ...osmResults].slice(0, 8);
-      }
-    }
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const places = await res.json();
+    if (!Array.isArray(places)) return [];
+    return places
+      .map((p: { display_name: string; lat: string; lon: string }) => {
+        const parts = p.display_name.split(',');
+        return {
+          name: parts[0],
+          subtitle: parts.slice(1, 3).join(',').trim(),
+          lat: parseFloat(p.lat),
+          lng: parseFloat(p.lon),
+        };
+      })
+      .filter((p) => isInDemoArea(p));
   } catch (err) {
-    console.warn('Nominatim geocode failed or timed out:', err);
+    console.warn('Nominatim search failed or timed out:', err);
+    return [];
   }
-
-  return localMatches;
 }
 
 interface OSRMStep {
@@ -154,147 +161,136 @@ interface OSRMStep {
     type: string;
     modifier?: string;
     location: [number, number]; // [lng, lat]
-    instruction?: string;
   };
 }
 
+// FOSSGIS's public OSRM server with the foot profile. (router.project-osrm.org only has a car
+// profile and silently ignores /foot/, which gave road routes with driving times.)
+const FOOT_ROUTER_URL = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot';
+
+const WALKING_SPEED_M_PER_MIN = 78; // ~1.3 m/s
+
 /**
- * Requests a real walking / footway route between any two points using OSRM Foot Profile.
+ * Requests a real walking route between two points in the demo area.
+ * Only turns become cues: "continue"/"depart" steps get no haptic, because the caution
+ * pattern is reserved for reported hazards.
  */
 export async function calculateLiveWalkingRoute(
   start: Point,
   destination: Point,
-  destName = 'Custom Destination'
+  destName = 'Selected Location'
 ): Promise<Route> {
-  const url = `https://router.project-osrm.org/route/v1/foot/${start.lng},${start.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson&steps=true`;
+  const url = `${FOOT_ROUTER_URL}/${start.lng},${start.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson&steps=true`;
 
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (res.ok) {
       const data = await res.json();
       if (data.code === 'Ok' && Array.isArray(data.routes) && data.routes.length > 0) {
         const osrmRoute = data.routes[0];
         const coordinates: [number, number][] = osrmRoute.geometry.coordinates; // [lng, lat]
         const totalDistanceM = Math.round(osrmRoute.distance);
-        const estMinutes = Math.max(1, Math.round(osrmRoute.distance / 78)); // ~1.3 m/s
-
-        // Map OSRM turn maneuvers to StepSafe steps
         const osrmSteps: OSRMStep[] = osrmRoute.legs?.[0]?.steps || [];
         const steps: RouteStep[] = [];
 
-        let currentDistAlong = 0;
-        osrmSteps.forEach((step, idx) => {
-          const isLast = idx === osrmSteps.length - 1;
-          const loc: Point = {
-            lat: step.maneuver.location[1],
-            lng: step.maneuver.location[0],
-          };
-
-          let cue: CueType = 'caution';
-          let instruction = '';
-
-          if (isLast || step.maneuver.type === 'arrive') {
-            cue = 'arrived';
-            instruction = `You have arrived at ${destName}`;
-          } else {
-            const mod = (step.maneuver.modifier || '').toLowerCase();
+        let distAlong = 0;
+        for (const step of osrmSteps) {
+          const { type, modifier = '' } = step.maneuver;
+          const turn = type === 'depart' || type === 'arrive' ? null : turnCue(modifier);
+          if (turn) {
             const street = step.name ? ` onto ${step.name}` : '';
-
-            if (mod.includes('left')) {
-              cue = 'left';
-              instruction = `Turn left${street}`;
-            } else if (mod.includes('right')) {
-              cue = 'right';
-              instruction = `Turn right${street}`;
-            } else if (step.maneuver.type === 'depart') {
-              cue = 'caution';
-              instruction = `Start walking${street}`;
-            } else {
-              cue = 'caution';
-              instruction = `Continue straight${street}`;
-            }
+            steps.push({
+              index: steps.length,
+              cue: turn,
+              location: { lat: step.maneuver.location[1], lng: step.maneuver.location[0] },
+              trigger_radius_m: 20,
+              distance_along_m: Math.round(distAlong),
+              instruction: `Turn ${turn}${street}`,
+            });
           }
-
-          steps.push({
-            index: steps.length,
-            cue,
-            location: loc,
-            trigger_radius_m: 20,
-            distance_along_m: Math.round(currentDistAlong),
-            instruction,
-          });
-
-          currentDistAlong += step.distance;
-        });
-
-        // Ensure there is at least an arrival step
-        if (steps.length === 0 || steps[steps.length - 1].cue !== 'arrived') {
-          steps.push({
-            index: steps.length,
-            cue: 'arrived',
-            location: destination,
-            trigger_radius_m: 25,
-            distance_along_m: totalDistanceM,
-            instruction: `You have arrived at ${destName}`,
-          });
+          distAlong += step.distance;
         }
 
-        const routeId = `rte_live_${Date.now()}`;
+        // Merge jogs, and drop turns right at the destination (they'd buzz just before "arrived").
+        const turns = mergeCloseTurns(steps).filter((s) => s.distance_along_m < totalDistanceM - ARRIVAL_SKIP_TURNS_M);
+        steps.splice(0, steps.length, ...turns.map((s, i) => ({ ...s, index: i })));
+        steps.push(arrivalStep(steps.length, destination, totalDistanceM, destName));
+
         return {
-          id: routeId,
-          name: `Live: Walk to ${destName}`,
+          id: `rte_live_${Date.now()}`,
+          name: `Walk to ${destName}`,
           distance_m: totalDistanceM,
-          est_minutes: estMinutes,
+          est_minutes: Math.max(1, Math.round(totalDistanceM / WALKING_SPEED_M_PER_MIN)),
           kind: 'live',
-          disclaimer: 'Live OpenStreetMap pedestrian route. Always verify actual sidewalk conditions.',
-          geometry: {
-            type: 'LineString',
-            coordinates,
-          },
+          disclaimer:
+            'Live walking route from OpenStreetMap data. It may not reflect closures, curb ramps or surface conditions. Rely on your own judgment.',
+          geometry: { type: 'LineString', coordinates },
           steps,
         };
       }
     }
   } catch (err) {
-    console.warn('OSRM routing request failed, falling back to direct walkway:', err);
+    console.warn('Walking route request failed, falling back to a straight line:', err);
   }
 
-  // Graceful direct pedestrian route fallback if external routing network is offline
+  // Fallback if the routing service is unreachable: a straight line, clearly labelled as such.
   const distM = Math.round(haversineDistanceM(start.lat, start.lng, destination.lat, destination.lng));
-  const fallbackCoords: [number, number][] = [
-    [start.lng, start.lat],
-    [(start.lng + destination.lng) / 2, (start.lat + destination.lat) / 2],
-    [destination.lng, destination.lat],
-  ];
-
   return {
     id: `rte_live_direct_${Date.now()}`,
-    name: `Live: Direct Walk to ${destName}`,
+    name: `Straight line to ${destName}`,
     distance_m: distM,
-    est_minutes: Math.max(1, Math.round(distM / 78)),
+    est_minutes: Math.max(1, Math.round(distM / WALKING_SPEED_M_PER_MIN)),
     kind: 'live',
-    disclaimer: 'Direct walking path estimate. Always verify physical sidewalk accessibility.',
+    disclaimer:
+      'Routing service unavailable: this is a straight line, not a walkable path. Do not follow it literally.',
     geometry: {
       type: 'LineString',
-      coordinates: fallbackCoords,
+      coordinates: [
+        [start.lng, start.lat],
+        [destination.lng, destination.lat],
+      ],
     },
-    steps: [
-      {
-        index: 0,
-        cue: 'caution',
-        location: start,
-        trigger_radius_m: 15,
-        distance_along_m: 0,
-        instruction: `Head toward ${destName}`,
-      },
-      {
-        index: 1,
-        cue: 'arrived',
-        location: destination,
-        trigger_radius_m: 25,
-        distance_along_m: distM,
-        instruction: `You have arrived at ${destName}`,
-      },
-    ],
+    steps: [arrivalStep(0, destination, distM, destName)],
+  };
+}
+
+// Turns closer together than this can't be told apart while walking (GPS is only accurate to
+// ~5-15 m), and footpath data is full of tiny jogs ("right, 5 m, left").
+const MERGE_TURNS_WITHIN_M = 12;
+const ARRIVAL_SKIP_TURNS_M = 15;
+
+/**
+ * Simplifies turns that are too close together: a right-then-left (or left-then-right) jog
+ * cancels out and both are dropped; two turns the same way keep only the first.
+ */
+function mergeCloseTurns(turns: RouteStep[]): RouteStep[] {
+  const kept: RouteStep[] = [];
+  for (const turn of turns) {
+    const prev = kept[kept.length - 1];
+    if (prev && turn.distance_along_m - prev.distance_along_m < MERGE_TURNS_WITHIN_M) {
+      if (prev.cue !== turn.cue) kept.pop(); // opposite jog: net straight
+      continue;
+    }
+    kept.push(turn);
+  }
+  return kept.map((s, i) => ({ ...s, index: i }));
+}
+
+function turnCue(modifier: string): CueType | null {
+  const m = modifier.toLowerCase();
+  if (m === 'uturn') return null;
+  if (m.includes('left')) return 'left';
+  if (m.includes('right')) return 'right';
+  return null;
+}
+
+function arrivalStep(index: number, destination: Point, distanceAlongM: number, destName: string): RouteStep {
+  return {
+    index,
+    cue: 'arrived',
+    location: destination,
+    trigger_radius_m: 25,
+    distance_along_m: distanceAlongM,
+    instruction: `You have arrived at ${destName}`,
   };
 }

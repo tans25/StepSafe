@@ -37,6 +37,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   const userMarkerRef = useRef<L.Marker | null>(null);
   const pendingMarkerRef = useRef<L.Marker | null>(null);
   const destMarkerRef = useRef<L.Marker | null>(null);
+  const fittedRouteIdRef = useRef<string | null>(null);
 
   // The Leaflet click listener is attached once, so read the latest handler through a ref.
   const onMapClickRef = useRef(onMapClickForReport);
@@ -49,9 +50,16 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     if (!mapElementRef.current || mapInstanceRef.current) return;
 
     const center = DEFAULT_META.demo_area.center;
+    // Keep the map on the UMD demo area (with a little margin): reports, hazards and routing
+    // only exist there.
+    const b = DEFAULT_META.demo_area.bounds;
+    const demoBounds = L.latLngBounds([b.min_lat, b.min_lng], [b.max_lat, b.max_lng]).pad(0.15);
     const map = L.map(mapElementRef.current, {
       center: [center[0], center[1]],
       zoom: 16,
+      minZoom: 14,
+      maxBounds: demoBounds,
+      maxBoundsViscosity: 1.0,
       zoomControl: false,
     });
 
@@ -75,13 +83,20 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
     mapInstanceRef.current = map;
 
+    // Leaflet must be told when its container changes size (e.g. the mobile route panel
+    // collapsing), or tiles and clicks are offset from where they appear.
+    const resizeObserver = new ResizeObserver(() => map.invalidateSize());
+    resizeObserver.observe(mapElementRef.current);
+
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapInstanceRef.current = null;
       // map.remove() also drops these markers; forget them so the next map recreates them
       // (otherwise React StrictMode / remounts leave us moving markers on a dead map).
       userMarkerRef.current = null;
       pendingMarkerRef.current = null;
+      destMarkerRef.current = null;
     };
   }, []);
 
@@ -100,7 +115,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         <div class="custom-hazard-pin ${isSelected ? 'selected' : ''} ${report.is_stale ? 'stale' : ''}" style="--pin-color: ${catInfo.color}">
           <div class="pin-bubble">
             <span class="pin-symbol">${getCategoryInitial(report.category)}</span>
-            ${report.is_stale ? '<span class="stale-dot" title="Older than 5 days">!</span>' : ''}
+            ${report.is_stale ? '<span class="stale-dot" title="May be outdated">!</span>' : ''}
           </div>
           <div class="pin-arrow"></div>
           <div class="pin-pulse"></div>
@@ -129,6 +144,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     if (!mapInstanceRef.current || !routeLayerRef.current) return;
 
     routeLayerRef.current.clearLayers();
+    if (!activeRoute) fittedRouteIdRef.current = null;
 
     if (activeRoute) {
       // Coords are [lng, lat] in GeoJSON; convert to [lat, lng] for Leaflet
@@ -153,6 +169,12 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
       routeLayerRef.current.addLayer(glowLine);
       routeLayerRef.current.addLayer(coreLine);
+
+      // Zoom to show the whole route once when it's first shown
+      if (fittedRouteIdRef.current !== activeRoute.id) {
+        fittedRouteIdRef.current = activeRoute.id;
+        mapInstanceRef.current.fitBounds(glowLine.getBounds(), { padding: [40, 40], maxZoom: 18 });
+      }
 
       // Add Start Marker
       const startCoord = latLngs[0];
@@ -224,6 +246,12 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       );
     } else {
       userMarkerRef.current.setLatLng(posLatLng);
+    }
+
+    // While walking (simulated or GPS), keep the walker in view
+    if (simulationPosition) {
+      const map = mapInstanceRef.current;
+      if (!map.getBounds().pad(-0.2).contains(posLatLng)) map.panTo(posLatLng);
     }
   }, [userLocation, simulationPosition]);
 

@@ -543,6 +543,37 @@
   color: var(--text-muted);
 }
 
+.nav-hint-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.nav-error-text {
+  font-size: 0.8rem;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.route-disclaimer-text {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.detail-sample-note {
+  font-size: 0.78rem;
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
 .warnings-scroll-list {
   display: flex;
   flex-direction: column;
@@ -1715,6 +1746,8 @@
 .search-suggestion-item {
   display: flex;
   align-items: center;
+  width: 100%;
+  text-align: left;
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border-subtle);
@@ -1945,5 +1978,113 @@
   .btn-label-desktop {
     display: none;
   }
+
+  /* Route guidance on phones: the compact bar sizes to its content so the map gets the rest. */
+  .navigation-side-pane:has(.nav-compact) {
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* Hazard filter chips aren't needed while navigating and cover the top of the map. */
+  .map-section-pane.nav-active .filter-bar-container {
+    display: none;
+  }
+
+  /* Slimmer navbar */
+  .navbar-top {
+    padding: 8px 12px;
+  }
+
+  .brand-subtitle,
+  .status-text {
+    display: none;
+  }
+
+  .navbar-tabs-row {
+    padding: 0 12px 6px 12px;
+  }
+
+  .tab-btn {
+    padding: 6px 10px;
+    white-space: nowrap;
+  }
+}
+
+/* Compact route guidance bar (phones, while a route is active) */
+.navigation-panel-container.nav-compact {
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+}
+
+.compact-cue-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  transition: box-shadow 0.2s ease;
+}
+
+.compact-cue-row.flashing-cue {
+  box-shadow: 0 0 18px rgba(6, 182, 212, 0.7);
+}
+
+.cue-hud-icon-box.compact-cue-icon {
+  width: 44px;
+  height: 44px;
+}
+
+.compact-cue-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.compact-route-name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compact-instruction {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.3;
+}
+
+.compact-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.compact-controls .sim-control-btn {
+  flex: 1;
+  padding: 9px 8px;
+}
+
+.compact-controls .sim-control-btn:nth-child(3) {
+  flex: 0 0 auto;
+}
+
+.sim-control-btn.gps-active {
+  color: var(--accent-emerald);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.collapse-panel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.35);
 }
 

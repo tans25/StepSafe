@@ -1,6 +1,6 @@
 import { DEFAULT_META, DEMO_PREPARED_ROUTES, SEEDED_FALLBACK_REPORTS } from '../config';
 import type { AppMeta, CueType, HapticPattern, NewReportPayload, Report, Route, RouteWarning } from '../types';
-import { haversineDistanceM } from './geo';
+import { cumulativeDistancesM, projectOntoPath } from './geo';
 
 const API_BASE = '/api';
 const LOCAL_STORAGE_KEY = 'stepsafe_reports_cache_v1';
@@ -24,6 +24,13 @@ function saveLocalReports(reports: Report[]): void {
   } catch (e) {
     console.warn('localStorage write failed', e);
   }
+}
+
+// Reports created while the backend is unreachable are kept only in this browser.
+const LOCAL_REPORT_ID_PREFIX = 'rpt_user_';
+
+export function isLocalOnlyReport(report: Report): boolean {
+  return report.id.startsWith(LOCAL_REPORT_ID_PREFIX);
 }
 
 let isBackendLive: boolean | null = null;
@@ -194,7 +201,7 @@ export async function createReport(payload: NewReportPayload): Promise<Report> {
 
   // Create optimistic local report
   const newReport: Report = {
-    id: `rpt_user_${Date.now()}`,
+    id: `${LOCAL_REPORT_ID_PREFIX}${Date.now()}`,
     category: payload.category,
     lat: payload.lat,
     lng: payload.lng,
@@ -322,46 +329,22 @@ export async function fetchRouteWarnings(
 export function computeRouteWarnings(
   route: Route,
   reports: Report[],
-  bufferM = 35
+  bufferM = 25
 ): RouteWarning[] {
-  const warnings: RouteWarning[] = [];
+  // Offline fallback for /api/routes/:id/warnings; same projection and buffer as the backend.
   const coords = route.geometry.coordinates; // [lng, lat]
+  if (coords.length < 2) return [];
+  const cumulative = cumulativeDistancesM(coords);
 
-  reports
+  return reports
     .filter((r) => r.status !== 'hidden')
-    .forEach((rep) => {
-      // Find min distance from report to any route point
-      let minDistance = Infinity;
-      let closestIdx = 0;
-
-      coords.forEach((c, idx) => {
-        const dist = haversineDistanceM(rep.lat, rep.lng, c[1], c[0]);
-        if (dist < minDistance) {
-          minDistance = dist;
-          closestIdx = idx;
-        }
-      });
-
-      if (minDistance <= bufferM) {
-        // Approximate distance along route to closest vertex
-        let distAlong = 0;
-        for (let i = 0; i < closestIdx; i++) {
-          distAlong += haversineDistanceM(
-            coords[i][1],
-            coords[i][0],
-            coords[i + 1][1],
-            coords[i + 1][0]
-          );
-        }
-
-        warnings.push({
-          report: rep,
-          distance_along_m: Math.round(distAlong),
-          offset_m: Math.round(minDistance),
-          cue: 'caution',
-        });
-      }
-    });
-
-  return warnings.sort((a, b) => a.distance_along_m - b.distance_along_m);
+    .map((rep) => ({ rep, ...projectOntoPath(coords, cumulative, rep.lat, rep.lng) }))
+    .filter((w) => w.offset_m <= bufferM)
+    .map((w) => ({
+      report: w.rep,
+      distance_along_m: Math.round(w.distance_along_m),
+      offset_m: Math.round(w.offset_m),
+      cue: 'caution' as const,
+    }))
+    .sort((a, b) => a.distance_along_m - b.distance_along_m);
 }
